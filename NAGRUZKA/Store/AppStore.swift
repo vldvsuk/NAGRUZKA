@@ -10,9 +10,24 @@ import Observation
 final class AppStore {
     static let currentUserId = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
 
+    private static let sviatId = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+    private static let vikaId = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
+    private static let romanId = UUID(uuidString: "00000000-0000-0000-0000-000000000004")!
+    private static let miaId = UUID(uuidString: "00000000-0000-0000-0000-000000000005")!
+    private static let tomId = UUID(uuidString: "00000000-0000-0000-0000-000000000006")!
+    private static let saraId = UUID(uuidString: "00000000-0000-0000-0000-000000000007")!
+    private static let felixId = UUID(uuidString: "00000000-0000-0000-0000-000000000008")!
+    private static let noahId = UUID(uuidString: "00000000-0000-0000-0000-000000000009")!
+    private static let lenaId = UUID(uuidString: "00000000-0000-0000-0000-00000000000A")!
+
     var trips: [Trip]
 
+    /// People you've added before (via a past invite link or manual add), so they can
+    /// be picked again for a new trip instead of re-entering their name.
+    var friends: [Participant]
+
     init() {
+        friends = AppStore.seedFriends()
         trips = AppStore.seedTrips()
     }
 
@@ -28,9 +43,13 @@ final class AppStore {
     }
 
     @discardableResult
-    func createTrip(name: String, destination: String) -> Trip {
+    func createTrip(name: String, destination: String, participants: [Participant] = []) -> Trip {
         let coverColors = ["FF3D20", "6366F1", "10B981", "F59E0B", "EC4899", "3B82F6"]
         let me = Participant(id: AppStore.currentUserId, name: "Vlad", colorHex: "4F46E5")
+        var members = [me]
+        for p in participants where !members.contains(where: { $0.id == p.id }) {
+            members.append(p)
+        }
         let trip = Trip(
             id: UUID(),
             name: name,
@@ -38,7 +57,7 @@ final class AppStore {
             dateRange: Formatting.shortDate(Date()),
             currency: "EUR",
             status: .active,
-            participants: [me],
+            participants: members,
             expenses: [],
             coverColorHex: coverColors[trips.count % coverColors.count]
         )
@@ -46,13 +65,33 @@ final class AppStore {
         return trip
     }
 
+    /// Adds a friend (already in `friends`) to a trip they're not yet part of.
+    func addFriendToTrip(_ friend: Participant, to tripId: UUID) {
+        guard let idx = trips.firstIndex(where: { $0.id == tripId }) else { return }
+        guard !trips[idx].participants.contains(where: { $0.id == friend.id }) else { return }
+        trips[idx].participants.append(friend)
+    }
+
+    /// Registers a new friend (e.g. someone typing their name after opening an invite
+    /// link) so they can be picked straight from the friends list on future trips.
+    @discardableResult
+    func addFriend(name: String, colorHex: String? = nil) -> Participant {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let existing = friends.first(where: { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            return existing
+        }
+        let palette = ["D97706", "DB2777", "059669", "0EA5E9", "7C3AED", "F59E0B", "EC4899", "10B981", "6366F1"]
+        let color = colorHex ?? palette[friends.count % palette.count]
+        let friend = Participant(name: trimmed, colorHex: color)
+        friends.append(friend)
+        return friend
+    }
+
     func addParticipant(name: String, to tripId: UUID) {
         guard let idx = trips.firstIndex(where: { $0.id == tripId }) else { return }
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        let colors = ["D97706", "DB2777", "059669", "0EA5E9", "7C3AED", "F59E0B"]
-        let color = colors[trips[idx].participants.count % colors.count]
-        trips[idx].participants.append(Participant(name: trimmed, colorHex: color))
+        let friend = addFriend(name: name)
+        guard !trips[idx].participants.contains(where: { $0.id == friend.id }) else { return }
+        trips[idx].participants.append(friend)
     }
 
     func addExpense(
@@ -68,12 +107,27 @@ final class AppStore {
         trips[idx].expenses.insert(expense, at: 0)
     }
 
+    private static func seedFriends() -> [Participant] {
+        [
+            Participant(id: sviatId, name: "Sviat", colorHex: "D97706"),
+            Participant(id: vikaId, name: "Vika", colorHex: "DB2777"),
+            Participant(id: romanId, name: "Roman", colorHex: "059669"),
+            Participant(id: miaId, name: "Mia", colorHex: "0EA5E9"),
+            Participant(id: tomId, name: "Tom", colorHex: "7C3AED"),
+            Participant(id: saraId, name: "Sara", colorHex: "EC4899"),
+            Participant(id: felixId, name: "Felix", colorHex: "10B981"),
+            Participant(id: noahId, name: "Noah", colorHex: "F59E0B"),
+            Participant(id: lenaId, name: "Lena", colorHex: "6366F1"),
+        ]
+    }
+
     private static func seedTrips() -> [Trip] {
         let vlad = Participant(id: currentUserId, name: "Vlad", colorHex: "4F46E5")
+        let byName = Dictionary(uniqueKeysWithValues: seedFriends().map { ($0.name, $0) })
 
-        let sviat = Participant(name: "Sviat", colorHex: "D97706")
-        let vika = Participant(name: "Vika", colorHex: "DB2777")
-        let roman = Participant(name: "Roman", colorHex: "059669")
+        let sviat = byName["Sviat"]!
+        let vika = byName["Vika"]!
+        let roman = byName["Roman"]!
         let pragueParticipants = [vlad, sviat, vika, roman]
         let prague = Trip(
             id: UUID(),
@@ -93,8 +147,8 @@ final class AppStore {
             coverColorHex: "4F46E5"
         )
 
-        let mia = Participant(name: "Mia", colorHex: "0EA5E9")
-        let tom = Participant(name: "Tom", colorHex: "7C3AED")
+        let mia = byName["Mia"]!
+        let tom = byName["Tom"]!
         let lisbonParticipants = [vlad, mia, tom]
         let lisbon = Trip(
             id: UUID(),
@@ -112,10 +166,10 @@ final class AppStore {
             coverColorHex: "F59E0B"
         )
 
-        let sara = Participant(name: "Sara", colorHex: "EC4899")
-        let felix = Participant(name: "Felix", colorHex: "10B981")
-        let noah = Participant(name: "Noah", colorHex: "F59E0B")
-        let lena = Participant(name: "Lena", colorHex: "6366F1")
+        let sara = byName["Sara"]!
+        let felix = byName["Felix"]!
+        let noah = byName["Noah"]!
+        let lena = byName["Lena"]!
         let berlinParticipants = [vlad, sara, felix, noah, lena]
         let berlin = Trip(
             id: UUID(),

@@ -18,7 +18,9 @@ struct TripDetailView: View {
 
     @State private var tab: DetailTab = .expenses
     @State private var showingAddExpense = false
+    @State private var showingInvite = false
     @State private var paidKeys: Set<String> = []
+    @State private var selectedParticipant: Participant?
 
     private var trip: Trip { store.trip(id: tripId) ?? .placeholder }
     private var balances: [UUID: Double] { BalanceCalculator.balances(for: trip) }
@@ -62,6 +64,12 @@ struct TripDetailView: View {
         .sheet(isPresented: $showingAddExpense) {
             AddExpenseSheet(tripId: tripId)
         }
+        .sheet(isPresented: $showingInvite) {
+            InvitePeopleSheet(tripId: tripId)
+        }
+        .sheet(item: $selectedParticipant) { participant in
+            ParticipantDetailSheet(tripId: tripId, participant: participant)
+        }
     }
 
     // MARK: - Header
@@ -82,17 +90,27 @@ struct TripDetailView: View {
                         .foregroundStyle(AppTheme.mutedForeground)
                 }
                 Spacer()
-                HStack(spacing: -8) {
-                    ForEach(trip.participants.prefix(4)) { p in
-                        AvatarView(participant: p, size: 28)
-                            .overlay(Circle().stroke(AppTheme.background, lineWidth: 2))
+                HStack(spacing: 8) {
+                    HStack(spacing: -8) {
+                        ForEach(trip.participants.prefix(4)) { p in
+                            AvatarView(participant: p, size: 28)
+                                .overlay(Circle().stroke(AppTheme.background, lineWidth: 2))
+                        }
+                        if trip.participants.count > 4 {
+                            Circle().fill(AppTheme.chip).frame(width: 28, height: 28)
+                                .overlay(
+                                    Text("+\(trip.participants.count - 4)")
+                                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                )
+                        }
                     }
-                    if trip.participants.count > 4 {
-                        Circle().fill(AppTheme.chip).frame(width: 28, height: 28)
-                            .overlay(
-                                Text("+\(trip.participants.count - 4)")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                            )
+                    Button {
+                        showingInvite = true
+                    } label: {
+                        Circle()
+                            .fill(AppTheme.accent)
+                            .frame(width: 28, height: 28)
+                            .overlay(Image(systemName: "plus").font(.system(size: 12, weight: .bold)).foregroundStyle(.white))
                     }
                 }
             }
@@ -210,31 +228,39 @@ struct TripDetailView: View {
                 let pos = bal > 0.01
                 let neg = bal < -0.01
                 let color: Color = pos ? AppTheme.positive : neg ? AppTheme.negative : AppTheme.mutedForeground
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 12) {
-                        AvatarView(participant: p, size: 40)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(p.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.foreground)
-                            Text(pos ? "is owed" : neg ? "owes" : "settled up").font(.system(size: 10, design: .monospaced)).foregroundStyle(color)
+                Button {
+                    selectedParticipant = p
+                } label: {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 12) {
+                            AvatarView(participant: p, size: 40)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(p.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(AppTheme.foreground)
+                                Text(pos ? "is owed" : neg ? "owes" : "settled up").font(.system(size: 10, design: .monospaced)).foregroundStyle(color)
+                            }
+                            Spacer()
+                            Text("\(pos ? "+" : neg ? "−" : "")€\(Formatting.money(abs(bal)))")
+                                .font(.system(size: 20, weight: .bold, design: .monospaced))
+                                .foregroundStyle(color)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(AppTheme.foreground.opacity(0.2))
                         }
-                        Spacer()
-                        Text("\(pos ? "+" : neg ? "−" : "")€\(Formatting.money(abs(bal)))")
-                            .font(.system(size: 20, weight: .bold, design: .monospaced))
-                            .foregroundStyle(color)
-                    }
-                    GeometryReader { geo in
-                        let ratio = trip.totalSpent > 0 ? min(1, abs(bal) / (trip.totalSpent * 0.6)) : 0
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(AppTheme.chip)
-                            Capsule().fill(color).frame(width: geo.size.width * ratio)
+                        GeometryReader { geo in
+                            let ratio = trip.totalSpent > 0 ? min(1, abs(bal) / (trip.totalSpent * 0.6)) : 0
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(AppTheme.chip)
+                                Capsule().fill(color).frame(width: geo.size.width * ratio)
+                            }
                         }
+                        .frame(height: 4)
                     }
-                    .frame(height: 4)
+                    .padding(16)
+                    .background(AppTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppTheme.border, lineWidth: 1))
                 }
-                .padding(16)
-                .background(AppTheme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .overlay(RoundedRectangle(cornerRadius: 20).stroke(AppTheme.border, lineWidth: 1))
+                .buttonStyle(.plain)
             }
 
             Text("BY CATEGORY")

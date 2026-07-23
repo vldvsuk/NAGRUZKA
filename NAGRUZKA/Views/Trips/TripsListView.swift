@@ -12,6 +12,8 @@ struct TripsListView: View {
     @State private var showingNewTrip = false
     @State private var newName = ""
     @State private var newDestination = ""
+    @State private var selectedFriendIds: Set<UUID> = []
+    @State private var inviteCode = String(UUID().uuidString.prefix(8)).lowercased()
 
     private var active: [Trip] { store.trips.filter { $0.status == .active } }
     private var ended: [Trip] { store.trips.filter { $0.status == .ended } }
@@ -114,27 +116,79 @@ struct TripsListView: View {
 
     private var newTripSheet: some View {
         NavigationStack {
-            Form {
-                Section("Trip name") {
-                    TextField("e.g. Bali Squad Trip", text: $newName)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("TRIP NAME").font(.system(size: 9, design: .monospaced)).tracking(1).foregroundStyle(AppTheme.foreground.opacity(0.35))
+                        TextField("e.g. Bali Squad Trip", text: $newName).font(.system(size: 13))
+                    }
+                    .padding(16)
+                    .background(AppTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.border, lineWidth: 1))
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("DESTINATION").font(.system(size: 9, design: .monospaced)).tracking(1).foregroundStyle(AppTheme.foreground.opacity(0.35))
+                        TextField("e.g. Indonesia", text: $newDestination).font(.system(size: 13))
+                    }
+                    .padding(16)
+                    .background(AppTheme.card)
+                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.border, lineWidth: 1))
+
+                    InvitePeopleSection(selectedFriendIds: $selectedFriendIds, inviteCode: inviteCode)
+
+                    if !selectedFriendIds.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("JOINING (\(selectedFriendIds.count))")
+                                .font(.system(size: 9, design: .monospaced))
+                                .tracking(1)
+                                .foregroundStyle(AppTheme.foreground.opacity(0.35))
+                            VStack(spacing: 0) {
+                                let selected = store.friends.filter { selectedFriendIds.contains($0.id) }
+                                ForEach(Array(selected.enumerated()), id: \.element.id) { index, friend in
+                                    if index > 0 { Divider().padding(.leading, 56) }
+                                    HStack(spacing: 12) {
+                                        AvatarView(participant: friend, size: 32)
+                                        Text(friend.name).font(.system(size: 13, weight: .medium)).foregroundStyle(AppTheme.foreground)
+                                        Spacer()
+                                        Button {
+                                            selectedFriendIds.remove(friend.id)
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill").foregroundStyle(AppTheme.mutedForeground)
+                                        }
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                }
+                            }
+                            .background(AppTheme.card)
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                            .overlay(RoundedRectangle(cornerRadius: 18).stroke(AppTheme.border, lineWidth: 1))
+                        }
+                    }
                 }
-                Section("Destination") {
-                    TextField("e.g. Indonesia", text: $newDestination)
-                }
+                .padding(20)
             }
+            .background(AppTheme.background)
             .navigationTitle("New trip")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { showingNewTrip = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
+                        let participants = store.friends.filter { selectedFriendIds.contains($0.id) }
                         let trip = store.createTrip(
                             name: newName.trimmingCharacters(in: .whitespaces),
-                            destination: newDestination.trimmingCharacters(in: .whitespaces)
+                            destination: newDestination.trimmingCharacters(in: .whitespaces),
+                            participants: participants
                         )
                         newName = ""
                         newDestination = ""
+                        selectedFriendIds = []
+                        inviteCode = String(UUID().uuidString.prefix(8)).lowercased()
                         showingNewTrip = false
                         onOpen(trip.id)
                     }
