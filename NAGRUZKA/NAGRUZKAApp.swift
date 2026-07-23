@@ -9,12 +9,14 @@ import SwiftUI
 
 @main
 struct NAGRUZKAApp: App {
-    @State private var store = TripStore()
+    @State private var store = AppStore()
+    @AppStorage("prefersDarkMode") private var prefersDarkMode = false
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(store)
+                .preferredColorScheme(prefersDarkMode ? .dark : nil)
         }
     }
 }
