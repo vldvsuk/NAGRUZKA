@@ -42,10 +42,19 @@ final class AppStore {
         }
     }
 
-    /// `participantId`'s personal share of costs across every trip — their own portion
-    /// of each expense they're split into, regardless of who fronted the money.
+    /// `participantId`'s personal share of costs across every active (non-archived) trip —
+    /// their own portion of each expense they're split into, regardless of who fronted
+    /// the money. Archived trips don't count toward this total.
     func personalSpend(by participantId: UUID) -> Double {
-        trips.reduce(0) { $0 + $1.personalSpend(by: participantId) }
+        trips
+            .filter { $0.status == .active }
+            .reduce(0) { $0 + $1.personalSpend(by: participantId) }
+    }
+
+    /// Archives an active trip, or reopens an archived one.
+    func toggleTripStatus(tripId: UUID) {
+        guard let idx = trips.firstIndex(where: { $0.id == tripId }) else { return }
+        trips[idx].status = trips[idx].status == .active ? .ended : .active
     }
 
     /// Records a real payment for a Settle Up entry marked as paid — reduces balances
@@ -90,6 +99,23 @@ final class AppStore {
         guard let idx = trips.firstIndex(where: { $0.id == tripId }) else { return }
         guard !trips[idx].participants.contains(where: { $0.id == friend.id }) else { return }
         trips[idx].participants.append(friend)
+    }
+
+    /// Removes a participant from a trip. Their past expenses are left untouched —
+    /// they'll just show up unassigned wherever that person was referenced.
+    func removeParticipant(_ participantId: UUID, from tripId: UUID) {
+        guard let idx = trips.firstIndex(where: { $0.id == tripId }) else { return }
+        trips[idx].participants.removeAll { $0.id == participantId }
+    }
+
+    func updateTripDetails(tripId: UUID, name: String, destination: String) {
+        guard let idx = trips.firstIndex(where: { $0.id == tripId }) else { return }
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        guard !trimmedName.isEmpty else { return }
+        trips[idx].name = trimmedName
+        trips[idx].destination = destination.trimmingCharacters(in: .whitespaces).isEmpty
+            ? "Unknown"
+            : destination.trimmingCharacters(in: .whitespaces)
     }
 
     /// Registers a new friend (e.g. someone typing their name after opening an invite

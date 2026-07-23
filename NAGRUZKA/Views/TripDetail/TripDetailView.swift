@@ -19,6 +19,8 @@ struct TripDetailView: View {
     @State private var tab: DetailTab = .expenses
     @State private var showingAddExpense = false
     @State private var showingInvite = false
+    @State private var showingEditTrip = false
+    @State private var showingArchiveConfirmation = false
     @State private var selectedParticipant: Participant?
 
     private var trip: Trip { store.trip(id: tripId) ?? .placeholder }
@@ -58,17 +60,54 @@ struct TripDetailView: View {
                 }
                 .tint(AppTheme.accent)
             }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Menu {
+                    Button {
+                        showingEditTrip = true
+                    } label: {
+                        Label("Edit trip", systemImage: "pencil")
+                    }
+                    Button {
+                        if trip.status == .active {
+                            showingArchiveConfirmation = true
+                        } else {
+                            withAnimation { store.toggleTripStatus(tripId: tripId) }
+                        }
+                    } label: {
+                        Label(
+                            trip.status == .active ? "Archive trip" : "Reopen trip",
+                            systemImage: trip.status == .active ? "archivebox" : "arrow.uturn.backward"
+                        )
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle").font(.system(size: 15, weight: .semibold))
+                }
+                .tint(AppTheme.accent)
+            }
         }
         .overlay(alignment: .bottomTrailing) {
             if tab == .expenses && trip.status == .active {
                 fab
             }
         }
+        .confirmationOverlay(
+            isPresented: $showingArchiveConfirmation,
+            icon: "archivebox.fill",
+            title: "Archive \(trip.name)?",
+            message: "It'll move to Archived and stop accepting new expenses. You can reopen it anytime.",
+            confirmLabel: "Archive"
+        ) {
+            store.toggleTripStatus(tripId: tripId)
+            dismiss()
+        }
         .sheet(isPresented: $showingAddExpense) {
             AddExpenseSheet(tripId: tripId)
         }
         .sheet(isPresented: $showingInvite) {
             InvitePeopleSheet(tripId: tripId)
+        }
+        .sheet(isPresented: $showingEditTrip) {
+            EditTripSheet(tripId: tripId)
         }
         .sheet(item: $selectedParticipant) { participant in
             ParticipantDetailSheet(tripId: tripId, participant: participant)
