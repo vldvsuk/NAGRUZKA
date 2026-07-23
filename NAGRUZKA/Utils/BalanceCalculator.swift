@@ -12,66 +12,39 @@ enum BalanceCalculator {
             result[participant.id] = 0
         }
         for expense in trip.expenses {
-            guard !expense.splitBetween.isEmpty else { continue }
-            let share = expense.amount / Double(expense.splitBetween.count)
             result[expense.paidBy, default: 0] += expense.amount
-            for participantId in expense.splitBetween {
-                result[participantId, default: 0] -= share
+            for share in expense.splitBetween {
+                result[share.participantId, default: 0] -= share.amountOwed
             }
         }
-        return result
-    }
-
-    /// Greedy debt-simplification: matches the biggest creditor with the biggest debtor
-    /// repeatedly, guaranteeing at most n-1 transactions for n people.
-    static func settlements(from balances: [UUID: Double]) -> [Settlement] {
-        var creditors = balances
-            .filter { $0.value > 0.01 }
-            .map { (id: $0.key, amount: $0.value) }
-            .sorted { $0.amount > $1.amount }
-
-        var debtors = balances
-            .filter { $0.value < -0.01 }
-            .map { (id: $0.key, amount: $0.value) }
-            .sorted { $0.amount < $1.amount }
-
-        var result: [Settlement] = []
-        var ci = 0
-        var di = 0
-
-        while ci < creditors.count && di < debtors.count {
-            let amount = min(creditors[ci].amount, -debtors[di].amount)
-            let rounded = (amount * 100).rounded() / 100
-
-            if rounded > 0.005 {
-                result.append(Settlement(from: debtors[di].id, to: creditors[ci].id, amount: rounded))
-            }
-
-            creditors[ci].amount -= amount
-            debtors[di].amount += amount
-
-            if creditors[ci].amount < 0.01 { ci += 1 }
-            if -debtors[di].amount < 0.01 { di += 1 }
+        for settlement in trip.recordedSettlements {
+            result[settlement.from, default: 0] += settlement.amount
+            result[settlement.to, default: 0] -= settlement.amount
         }
-
         return result
     }
 
     /// For `participantId`, returns how much each other participant owes them (positive)
     /// or is owed by them (negative), computed directly from expense participation —
-    /// not routed through the minimized settlement graph, so it reflects the real
+    /// not routed through a minimized settlement graph, so it reflects the real
     /// person-to-person relationship rather than an optimized third-party payment.
+    /// Recorded payments (marked "paid" in Settle Up) reduce these amounts.
     static func pairwiseNet(for participantId: UUID, in trip: Trip) -> [UUID: Double] {
         var net: [UUID: Double] = [:]
         for expense in trip.expenses {
-            guard !expense.splitBetween.isEmpty else { continue }
-            let share = expense.amount / Double(expense.splitBetween.count)
             if expense.paidBy == participantId {
-                for otherId in expense.splitBetween where otherId != participantId {
-                    net[otherId, default: 0] += share
+                for share in expense.splitBetween where share.participantId != participantId {
+                    net[share.participantId, default: 0] += share.amountOwed
                 }
-            } else if expense.splitBetween.contains(participantId) {
-                net[expense.paidBy, default: 0] -= share
+            } else if let mine = expense.amountOwed(by: participantId) {
+                net[expense.paidBy, default: 0] -= mine
+            }
+        }
+        for settlement in trip.recordedSettlements {
+            if settlement.from == participantId {
+                net[settlement.to, default: 0] += settlement.amount
+            } else if settlement.to == participantId {
+                net[settlement.from, default: 0] -= settlement.amount
             }
         }
         return net
@@ -84,12 +57,54 @@ enum BalanceCalculator {
         trip.expenses
             .compactMap { expense -> (expense: Expense, netEffect: Double)? in
                 let isPayer = expense.paidBy == participantId
-                let isSplit = expense.splitBetween.contains(participantId)
-                guard isPayer || isSplit else { return nil }
-                let share = isSplit ? expense.sharePerPerson : 0
+                let mine = expense.amountOwed(by: participantId)
+                guard isPayer || mine != nil else { return nil }
                 let paid = isPayer ? expense.amount : 0
-                return (expense: expense, netEffect: paid - share)
+                return (expense: expense, netEffect: paid - (mine ?? 0))
             }
             .sorted { $0.expense.date > $1.expense.date }
+    }
+
+    /// The full, un-minimized ledger: every pair of people with a nonzero direct debt
+    /// between them (net of anything they owe each other in the opposite direction),
+    /// alongside how much of that debt has actually been paid. Unlike a minimized
+    /// settlement (fewest transactions via net balance), this shows every real
+    /// person-to-person debt — e.g. "Vika owes Sviat €21.75" even though Sviat
+    /// separately owes someone else overall. Entries stay in the list once paid
+    /// (marked settled) instead of disappearing, so paying can be undone.
+    static func settlementLedger(in trip: Trip) -> [SettlementLedgerEntry] {
+        var owes: [UUID: [UUID: Double]] = [:]
+        for expense in trip.expenses {
+            for share in expense.splitBetween where share.participantId != expense.paidBy {
+                owes[share.participantId, default: [:]][expense.paidBy, default: 0] += share.amountOwed
+            }
+        }
+
+        var entries: [SettlementLedgerEntry] = []
+        var seenPairs = Set<Set<UUID>>()
+
+        for (a, targets) in owes {
+            for b in targets.keys {
+                let pairKey: Set<UUID> = [a, b]
+                guard !seenPairs.contains(pairKey) else { continue }
+                seenPairs.insert(pairKey)
+
+                let aOwesB = owes[a]?[b] ?? 0
+                let bOwesA = owes[b]?[a] ?? 0
+                let net = aOwesB - bOwesA
+                guard abs(net) > 0.01 else { continue }
+
+                let from = net > 0 ? a : b
+                let to = net > 0 ? b : a
+                let owedAmount = (abs(net) * 100).rounded() / 100
+                let paidAmount = trip.recordedSettlements
+                    .filter { $0.from == from && $0.to == to }
+                    .reduce(0) { $0 + $1.amount }
+
+                entries.append(SettlementLedgerEntry(from: from, to: to, owedAmount: owedAmount, paidAmount: paidAmount))
+            }
+        }
+
+        return entries.sorted { $0.owedAmount > $1.owedAmount }
     }
 }

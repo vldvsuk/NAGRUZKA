@@ -42,6 +42,26 @@ final class AppStore {
         }
     }
 
+    /// `participantId`'s personal share of costs across every trip — their own portion
+    /// of each expense they're split into, regardless of who fronted the money.
+    func personalSpend(by participantId: UUID) -> Double {
+        trips.reduce(0) { $0 + $1.personalSpend(by: participantId) }
+    }
+
+    /// Records a real payment for a Settle Up entry marked as paid — reduces balances
+    /// from here on without touching the underlying expenses. The entry stays visible,
+    /// marked settled, until `removeSettlementPayments` undoes it.
+    func recordSettlementPayment(tripId: UUID, from: UUID, to: UUID, amount: Double) {
+        guard let idx = trips.firstIndex(where: { $0.id == tripId }) else { return }
+        trips[idx].recordedSettlements.append(RecordedSettlement(from: from, to: to, amount: amount))
+    }
+
+    /// Undoes every recorded payment between this pair, restoring the entry to unpaid.
+    func removeSettlementPayments(tripId: UUID, from: UUID, to: UUID) {
+        guard let idx = trips.firstIndex(where: { $0.id == tripId }) else { return }
+        trips[idx].recordedSettlements.removeAll { $0.from == from && $0.to == to }
+    }
+
     @discardableResult
     func createTrip(name: String, destination: String, participants: [Participant] = []) -> Trip {
         let coverColors = ["FF3D20", "6366F1", "10B981", "F59E0B", "EC4899", "3B82F6"]
@@ -100,7 +120,7 @@ final class AppStore {
         category: ExpenseCategory,
         amount: Double,
         paidBy: UUID,
-        splitBetween: [UUID]
+        splitBetween: [SplitShare]
     ) {
         guard let idx = trips.firstIndex(where: { $0.id == tripId }), amount > 0, !splitBetween.isEmpty else { return }
         let expense = Expense(description: description, category: category, amount: amount, paidBy: paidBy, splitBetween: splitBetween)
@@ -138,11 +158,11 @@ final class AppStore {
             status: .active,
             participants: pragueParticipants,
             expenses: [
-                Expense(description: "Hotel Ventana", category: .accommodation, amount: 320, paidBy: vlad.id, splitBetween: pragueParticipants.map(\.id), date: makeDate(2024, 3, 14)),
-                Expense(description: "Dinner at V Zátiší", category: .food, amount: 87, paidBy: sviat.id, splitBetween: pragueParticipants.map(\.id), date: makeDate(2024, 3, 14)),
-                Expense(description: "Old Town Museum", category: .activities, amount: 48, paidBy: vika.id, splitBetween: [vlad.id, vika.id, roman.id], date: makeDate(2024, 3, 15)),
-                Expense(description: "Airport transfer", category: .transport, amount: 34, paidBy: roman.id, splitBetween: pragueParticipants.map(\.id), date: makeDate(2024, 3, 15)),
-                Expense(description: "Sunday brunch", category: .food, amount: 62, paidBy: vlad.id, splitBetween: pragueParticipants.map(\.id), date: makeDate(2024, 3, 16)),
+                Expense(description: "Hotel Ventana", category: .accommodation, amount: 320, paidBy: vlad.id, splitBetween: pragueParticipants.map(\.id).equalShares(of: 320), date: makeDate(2024, 3, 14)),
+                Expense(description: "Dinner at V Zátiší", category: .food, amount: 87, paidBy: sviat.id, splitBetween: pragueParticipants.map(\.id).equalShares(of: 87), date: makeDate(2024, 3, 14)),
+                Expense(description: "Old Town Museum", category: .activities, amount: 48, paidBy: vika.id, splitBetween: [vlad.id, vika.id, roman.id].equalShares(of: 48), date: makeDate(2024, 3, 15)),
+                Expense(description: "Airport transfer", category: .transport, amount: 34, paidBy: roman.id, splitBetween: pragueParticipants.map(\.id).equalShares(of: 34), date: makeDate(2024, 3, 15)),
+                Expense(description: "Sunday brunch", category: .food, amount: 62, paidBy: vlad.id, splitBetween: pragueParticipants.map(\.id).equalShares(of: 62), date: makeDate(2024, 3, 16)),
             ],
             coverColorHex: "4F46E5"
         )
@@ -159,9 +179,9 @@ final class AppStore {
             status: .active,
             participants: lisbonParticipants,
             expenses: [
-                Expense(description: "Airbnb Alfama", category: .accommodation, amount: 480, paidBy: vlad.id, splitBetween: lisbonParticipants.map(\.id), date: makeDate(2024, 6, 1)),
-                Expense(description: "TAP flights (3x)", category: .flights, amount: 390, paidBy: mia.id, splitBetween: lisbonParticipants.map(\.id), date: makeDate(2024, 5, 28)),
-                Expense(description: "Tasca do Chico", category: .food, amount: 67, paidBy: tom.id, splitBetween: lisbonParticipants.map(\.id), date: makeDate(2024, 6, 2)),
+                Expense(description: "Airbnb Alfama", category: .accommodation, amount: 480, paidBy: vlad.id, splitBetween: lisbonParticipants.map(\.id).equalShares(of: 480), date: makeDate(2024, 6, 1)),
+                Expense(description: "TAP flights (3x)", category: .flights, amount: 390, paidBy: mia.id, splitBetween: lisbonParticipants.map(\.id).equalShares(of: 390), date: makeDate(2024, 5, 28)),
+                Expense(description: "Tasca do Chico", category: .food, amount: 67, paidBy: tom.id, splitBetween: lisbonParticipants.map(\.id).equalShares(of: 67), date: makeDate(2024, 6, 2)),
             ],
             coverColorHex: "F59E0B"
         )
@@ -180,9 +200,9 @@ final class AppStore {
             status: .ended,
             participants: berlinParticipants,
             expenses: [
-                Expense(description: "Hostel Mitte", category: .accommodation, amount: 640, paidBy: vlad.id, splitBetween: berlinParticipants.map(\.id), date: makeDate(2023, 12, 30)),
-                Expense(description: "NYE party tickets", category: .activities, amount: 250, paidBy: felix.id, splitBetween: berlinParticipants.map(\.id), date: makeDate(2023, 12, 31)),
-                Expense(description: "Supermarket run", category: .food, amount: 89, paidBy: sara.id, splitBetween: berlinParticipants.map(\.id), date: makeDate(2023, 12, 31)),
+                Expense(description: "Hostel Mitte", category: .accommodation, amount: 640, paidBy: vlad.id, splitBetween: berlinParticipants.map(\.id).equalShares(of: 640), date: makeDate(2023, 12, 30)),
+                Expense(description: "NYE party tickets", category: .activities, amount: 250, paidBy: felix.id, splitBetween: berlinParticipants.map(\.id).equalShares(of: 250), date: makeDate(2023, 12, 31)),
+                Expense(description: "Supermarket run", category: .food, amount: 89, paidBy: sara.id, splitBetween: berlinParticipants.map(\.id).equalShares(of: 89), date: makeDate(2023, 12, 31)),
             ],
             coverColorHex: "141410"
         )

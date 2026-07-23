@@ -6,6 +6,7 @@
 import SwiftUI
 
 struct SettingsView: View {
+    @Environment(AppStore.self) private var store
     @AppStorage("prefersDarkMode") private var prefersDarkMode = false
     @State private var notificationsEnabled = true
     @State private var currency = "EUR"
@@ -54,19 +55,36 @@ struct SettingsView: View {
 
     private var profileSection: some View {
         card {
-            HStack(spacing: 14) {
-                Circle()
-                    .fill(Color(hex: "4F46E5"))
-                    .frame(width: 48, height: 48)
-                    .overlay(Text("V").font(.system(size: 18, weight: .bold)).foregroundStyle(.white))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Vlad").font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.foreground)
-                    Text("vlad@example.com").font(.system(size: 11, design: .monospaced)).foregroundStyle(AppTheme.mutedForeground)
+            VStack(spacing: 0) {
+                HStack(spacing: 14) {
+                    Circle()
+                        .fill(Color(hex: "4F46E5"))
+                        .frame(width: 48, height: 48)
+                        .overlay(Text("V").font(.system(size: 18, weight: .bold)).foregroundStyle(.white))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Vlad").font(.system(size: 14, weight: .bold)).foregroundStyle(AppTheme.foreground)
+                        Text("vlad@example.com").font(.system(size: 11, design: .monospaced)).foregroundStyle(AppTheme.mutedForeground)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.system(size: 13)).foregroundStyle(AppTheme.foreground.opacity(0.25))
                 }
-                Spacer()
-                Image(systemName: "chevron.right").font(.system(size: 13)).foregroundStyle(AppTheme.foreground.opacity(0.25))
+                .padding(16)
+
+                Divider().padding(.leading, 16)
+
+                HStack {
+                    Text("TOTAL PAID BY YOU")
+                        .font(.system(size: 9, design: .monospaced))
+                        .tracking(1)
+                        .foregroundStyle(AppTheme.foreground.opacity(0.35))
+                    Spacer()
+                    Text("€\(Formatting.money(store.personalSpend(by: AppStore.currentUserId)))")
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundStyle(AppTheme.foreground)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
             }
-            .padding(16)
         }
     }
 
@@ -83,7 +101,7 @@ struct SettingsView: View {
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 5)
                                     .background(currency == c ? AppTheme.foreground : AppTheme.chip)
-                                    .foregroundStyle(currency == c ? Color.white : AppTheme.foreground.opacity(0.5))
+                                    .foregroundStyle(currency == c ? AppTheme.background : AppTheme.foreground.opacity(0.5))
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                             }
                         }
@@ -117,7 +135,7 @@ struct SettingsView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 8)
                                 .background(splitMethod == method ? AppTheme.foreground : Color.clear)
-                                .foregroundStyle(splitMethod == method ? Color.white : AppTheme.foreground.opacity(0.45))
+                                .foregroundStyle(splitMethod == method ? AppTheme.background : AppTheme.foreground.opacity(0.45))
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(splitMethod == method ? Color.clear : AppTheme.border, lineWidth: 1))
                         }
@@ -201,4 +219,5 @@ struct SettingsView: View {
 
 #Preview {
     SettingsView()
+        .environment(AppStore())
 }

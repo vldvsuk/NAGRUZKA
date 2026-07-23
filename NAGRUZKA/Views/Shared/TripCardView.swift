@@ -111,7 +111,7 @@ struct TripCardView: View {
             Participant(name: "Dima", colorHex: "D97706"),
         ],
         expenses: [
-            Expense(description: "Hotel", category: .accommodation, amount: 320, paidBy: UUID(), splitBetween: [UUID()]),
+            Expense(description: "Hotel", category: .accommodation, amount: 320, paidBy: UUID(), splitBetween: [SplitShare(participantId: UUID(), amountOwed: 320)]),
         ],
         coverColorHex: "4F46E5"
     )

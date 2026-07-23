@@ -19,12 +19,11 @@ struct TripDetailView: View {
     @State private var tab: DetailTab = .expenses
     @State private var showingAddExpense = false
     @State private var showingInvite = false
-    @State private var paidKeys: Set<String> = []
     @State private var selectedParticipant: Participant?
 
     private var trip: Trip { store.trip(id: tripId) ?? .placeholder }
     private var balances: [UUID: Double] { BalanceCalculator.balances(for: trip) }
-    private var settlements: [Settlement] { BalanceCalculator.settlements(from: balances) }
+    private var ledger: [SettlementLedgerEntry] { BalanceCalculator.settlementLedger(in: trip) }
 
     private var expensesByDate: [(date: Date, expenses: [Expense])] {
         let grouped = Dictionary(grouping: trip.expenses) { Calendar.current.startOfDay(for: $0.date) }
@@ -114,15 +113,25 @@ struct TripDetailView: View {
                     }
                 }
             }
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("TOTAL SPENT").font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
-                    Text("\(trip.expenses.count) expenses").font(.system(size: 11, design: .monospaced)).foregroundStyle(.white.opacity(0.5))
+            VStack(spacing: 10) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("TOTAL SPENT").font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
+                        Text("\(trip.expenses.count) expenses").font(.system(size: 11, design: .monospaced)).foregroundStyle(.white.opacity(0.5))
+                    }
+                    Spacer()
+                    Text("€\(Formatting.money(trip.totalSpent))")
+                        .font(.system(size: 24, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white)
                 }
-                Spacer()
-                Text("€\(Formatting.money(trip.totalSpent))")
-                    .font(.system(size: 24, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white)
+                Divider().background(.white.opacity(0.1))
+                HStack {
+                    Text("YOU PAID").font(.system(size: 10, design: .monospaced)).foregroundStyle(.white.opacity(0.4))
+                    Spacer()
+                    Text("€\(Formatting.money(trip.personalSpend(by: AppStore.currentUserId)))")
+                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.85))
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
@@ -211,7 +220,11 @@ struct TripDetailView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
                 Text("€\(Formatting.money(expense.amount))").font(.system(size: 13, weight: .bold, design: .monospaced)).foregroundStyle(AppTheme.foreground)
-                Text("€\(Formatting.money(expense.sharePerPerson))/ea").font(.system(size: 10, design: .monospaced)).foregroundStyle(AppTheme.foreground.opacity(0.3))
+                if let equalShare = expense.equalShareAmount {
+                    Text("€\(Formatting.money(equalShare))/ea").font(.system(size: 10, design: .monospaced)).foregroundStyle(AppTheme.foreground.opacity(0.3))
+                } else {
+                    Text("custom split").font(.system(size: 10, design: .monospaced)).foregroundStyle(AppTheme.foreground.opacity(0.3))
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -318,17 +331,19 @@ struct TripDetailView: View {
     // MARK: - Settle tab
 
     private var settleContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("\(settlements.count) PAYMENT\(settlements.count == 1 ? "" : "S") TO CLOSE THE TRIP")
+        let outstanding = ledger.filter { !$0.isSettled }.count
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("\(outstanding) PAYMENT\(outstanding == 1 ? "" : "S") TO CLOSE THE TRIP")
                 .font(.system(size: 10, design: .monospaced))
                 .tracking(1)
                 .foregroundStyle(AppTheme.foreground.opacity(0.35))
 
-            ForEach(settlements) { settlement in
-                settlementCard(settlement)
+            ForEach(ledger) { entry in
+                settlementCard(entry)
             }
 
-            if settlements.isEmpty {
+            if ledger.isEmpty {
                 VStack(spacing: 10) {
                     ZStack {
                         Circle().fill(AppTheme.positive.opacity(0.1)).frame(width: 48, height: 48)
@@ -343,10 +358,10 @@ struct TripDetailView: View {
         }
     }
 
-    private func settlementCard(_ settlement: Settlement) -> some View {
-        let from = trip.participants.first { $0.id == settlement.from }
-        let to = trip.participants.first { $0.id == settlement.to }
-        let paid = paidKeys.contains(settlement.id)
+    private func settlementCard(_ entry: SettlementLedgerEntry) -> some View {
+        let from = trip.participants.first { $0.id == entry.from }
+        let to = trip.participants.first { $0.id == entry.to }
+        let paid = entry.isSettled
 
         return VStack(spacing: 10) {
             HStack {
@@ -359,8 +374,11 @@ struct TripDetailView: View {
                 }
                 Spacer()
                 VStack(spacing: 2) {
-                    Text("€\(Formatting.money(settlement.amount))").font(.system(size: 16, weight: .bold, design: .monospaced)).foregroundStyle(AppTheme.accent)
-                    Image(systemName: "arrow.right").font(.system(size: 12)).foregroundStyle(AppTheme.foreground.opacity(0.2))
+                    Text("€\(Formatting.money(paid ? entry.owedAmount : entry.remaining))")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundStyle(paid ? AppTheme.positive : AppTheme.accent)
+                        .strikethrough(paid, color: AppTheme.positive)
+                    Image(systemName: paid ? "checkmark" : "arrow.right").font(.system(size: 12)).foregroundStyle(paid ? AppTheme.positive : AppTheme.foreground.opacity(0.2))
                 }
                 Spacer()
                 HStack(spacing: 10) {
@@ -372,12 +390,18 @@ struct TripDetailView: View {
                 }
             }
             Button {
-                if paid { paidKeys.remove(settlement.id) } else { paidKeys.insert(settlement.id) }
+                withAnimation {
+                    if paid {
+                        store.removeSettlementPayments(tripId: tripId, from: entry.from, to: entry.to)
+                    } else {
+                        store.recordSettlementPayment(tripId: tripId, from: entry.from, to: entry.to, amount: entry.remaining)
+                    }
+                }
             } label: {
                 HStack(spacing: 6) {
                     if paid {
                         Image(systemName: "checkmark").font(.system(size: 11, weight: .bold))
-                        Text("Marked as paid")
+                        Text("Paid — tap to undo")
                     } else {
                         Text("Mark as paid")
                     }

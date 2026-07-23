@@ -113,19 +113,22 @@ struct InvitePeopleSection: View {
 
     private var addNewFriendField: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("ADD SOMEONE NEW")
+            Text("ADD BY USERNAME OR ID")
                 .font(.system(size: 9, design: .monospaced))
                 .tracking(1)
                 .foregroundStyle(AppTheme.foreground.opacity(0.35))
             HStack(spacing: 8) {
-                TextField("Name", text: $newFriendName)
-                    .font(.system(size: 13))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(AppTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.border, lineWidth: 1))
-                    .onSubmit(addNewFriend)
+                HStack(spacing: 4) {
+                    Text("#").font(.system(size: 13, weight: .semibold, design: .monospaced)).foregroundStyle(AppTheme.foreground.opacity(0.3))
+                    TextField("username or ID", text: $newFriendName)
+                        .font(.system(size: 13, design: .monospaced))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(AppTheme.card)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(AppTheme.border, lineWidth: 1))
+                .onSubmit(addNewFriend)
                 Button(action: addNewFriend) {
                     Image(systemName: "plus")
                         .font(.system(size: 14, weight: .bold))
@@ -136,7 +139,7 @@ struct InvitePeopleSection: View {
                 }
                 .disabled(newFriendName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            Text("They'll be saved to your friends list for future trips too.")
+            Text("Placeholder only — not a real lookup yet. They'll be saved to your friends list for future trips too.")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(AppTheme.foreground.opacity(0.3))
         }
