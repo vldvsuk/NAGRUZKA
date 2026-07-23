@@ -23,7 +23,11 @@ struct TripDetailView: View {
 
     private var trip: Trip { store.trip(id: tripId) ?? .placeholder }
     private var balances: [UUID: Double] { BalanceCalculator.balances(for: trip) }
-    private var ledger: [SettlementLedgerEntry] { BalanceCalculator.settlementLedger(in: trip) }
+
+    /// Outstanding debts first, settled ones pushed to the bottom.
+    private var ledger: [SettlementLedgerEntry] {
+        BalanceCalculator.settlementLedger(in: trip).sorted { !$0.isSettled && $1.isSettled }
+    }
 
     private var expensesByDate: [(date: Date, expenses: [Expense])] {
         let grouped = Dictionary(grouping: trip.expenses) { Calendar.current.startOfDay(for: $0.date) }
@@ -378,7 +382,11 @@ struct TripDetailView: View {
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
                         .foregroundStyle(paid ? AppTheme.positive : AppTheme.accent)
                         .strikethrough(paid, color: AppTheme.positive)
-                    Image(systemName: paid ? "checkmark" : "arrow.right").font(.system(size: 12)).foregroundStyle(paid ? AppTheme.positive : AppTheme.foreground.opacity(0.2))
+                    if !paid {
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 12))
+                            .foregroundStyle(AppTheme.foreground.opacity(0.2))
+                    }
                 }
                 Spacer()
                 HStack(spacing: 10) {
@@ -398,20 +406,13 @@ struct TripDetailView: View {
                     }
                 }
             } label: {
-                HStack(spacing: 6) {
-                    if paid {
-                        Image(systemName: "checkmark").font(.system(size: 11, weight: .bold))
-                        Text("Paid — tap to undo")
-                    } else {
-                        Text("Mark as paid")
-                    }
-                }
-                .font(.system(size: 11, weight: .semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(paid ? AppTheme.positive.opacity(0.12) : AppTheme.chip)
-                .foregroundStyle(paid ? AppTheme.positive : AppTheme.foreground.opacity(0.45))
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                Text(paid ? "Paid — tap to undo" : "Mark as paid")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(paid ? AppTheme.positive.opacity(0.12) : AppTheme.chip)
+                    .foregroundStyle(paid ? AppTheme.positive : AppTheme.foreground.opacity(0.45))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
             }
         }
         .padding(16)

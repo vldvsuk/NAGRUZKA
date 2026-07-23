@@ -1,0 +1,34 @@
+
+# NAGRUZKA
+
+A simple iOS app for splitting trip expenses with friends — log who paid for what, and see who owes who at the end (or anytime during the trip).
+
+## What it does (v1)
+
+- Create a trip
+- Add participants by name
+- Log expenses: description, amount, category, who paid, who it's split between
+- Predefined categories: Food/Café, Transport, Flights, Accommodation, Activities, Other
+- Equal-split calculation across selected participants
+- **Balances view** — each person's net position (+ owed to them, − they owe)
+- **Settlement view** — minimal "who pays who" list, computed via a greedy debt-simplification algorithm (at most n−1 transactions for n people)
+
+## Planned (not built yet)
+
+- Invite friends via a shareable link (requires a backend)
+- Custom split amounts, percentages, or weighted shares
+- Multiple payers per expense
+- Partial/live settlements ("pay along the way" instead of only at trip end)
+- Custom categories
+- Multi-currency support
+
+## Tech stack
+
+- **SwiftUI** (iOS)
+- **State**: local in-memory only for now — nothing persists between app launches, no sync between devices yet
+- **Backend**: not yet chosen — under evaluation between CloudKit (Apple-only, $99/yr dev account), Firebase (free, cross-platform), and Supabase (free with pause-on-inactivity, real Postgres/SQL)
+
+
+## Status
+
+Early prototype. Local-only — no persistence, no invite links, no backend sync yet.

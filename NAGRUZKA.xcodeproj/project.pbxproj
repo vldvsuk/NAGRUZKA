@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		6DB6D86C30129CD400427568 /* README in Resources */ = {isa = PBXBuildFile; fileRef = 6DB6D86B30129CCB00427568 /* README */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		6D40667D3010F08D00449FAB /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +31,7 @@
 		6D40666F3010F08A00449FAB /* NAGRUZKA.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NAGRUZKA.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D40667C3010F08D00449FAB /* NAGRUZKATests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NAGRUZKATests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6D4066863010F08D00449FAB /* NAGRUZKAUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = NAGRUZKAUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6DB6D86B30129CCB00427568 /* README */ = {isa = PBXFileReference; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -75,6 +80,7 @@
 		6D4066663010F08A00449FAB = {
 			isa = PBXGroup;
 			children = (
+				6DB6D86B30129CCB00427568 /* README */,
 				6D4066713010F08A00449FAB /* NAGRUZKA */,
 				6D40667F3010F08D00449FAB /* NAGRUZKATests */,
 				6D4066893010F08D00449FAB /* NAGRUZKAUITests */,
@@ -212,6 +218,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6DB6D86C30129CD400427568 /* README in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
